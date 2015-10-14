@@ -42,6 +42,10 @@ type Marshaler interface {
 	MarshalYAML() (interface{}, error)
 }
 
+type StreamMarshaler interface {
+	StreamMarshalYAML(*StreamEncoder) error
+}
+
 // Unmarshal decodes the first document found within the in byte slice
 // and assigns decoded values into the out value.
 //

@@ -81,7 +81,14 @@ func (e *encoder) marshal(tag string, in reflect.Value) {
 			fail(err)
 		}
 		in = reflect.ValueOf(string(text))
+	} else if m, ok := iface.(StreamMarshaler); ok {
+		err := m.StreamMarshalYAML(&StreamEncoder{e})
+		if err != nil {
+			fail(err)
+		}
+		return
 	}
+
 	switch in.Kind() {
 	case reflect.Interface:
 		if in.IsNil() {

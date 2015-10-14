@@ -1,6 +1,7 @@
 package yaml
 
 import (
+	"fmt"
 	"io"
 )
 
@@ -238,6 +239,37 @@ const (
 	yaml_MAPPING_START_EVENT  // A MAPPING-START event.
 	yaml_MAPPING_END_EVENT    // A MAPPING-END event.
 )
+
+func (et yaml_event_type_t) String() string {
+	switch et {
+	case yaml_NO_EVENT:
+		return "NO-EVENT"
+	case yaml_STREAM_START_EVENT:
+		return "STREAM-START"
+	case yaml_STREAM_END_EVENT:
+		return "STREAM-END"
+	case yaml_DOCUMENT_START_EVENT:
+		return "DOCUMENT-START"
+	case yaml_DOCUMENT_END_EVENT:
+		return "DOCUMENT-END"
+	case yaml_ALIAS_EVENT:
+		return "ALIAS"
+	case yaml_SCALAR_EVENT:
+		return "SCALAR"
+	case yaml_SEQUENCE_START_EVENT:
+		return "SEQUENCE-START"
+	case yaml_SEQUENCE_END_EVENT:
+		return "SEQUENCE-END"
+	case yaml_MAPPING_START_EVENT:
+		return "MAPPING-START"
+	case yaml_MAPPING_END_EVENT:
+		return "MAPPING-END"
+	case yaml_COMMENT_EVENT:
+		return "COMMENT"
+	default:
+		return fmt.Sprintf("UNKNOWN-EVENT(%v)", et)
+	}
+}
 
 // The event structure.
 type yaml_event_t struct {
