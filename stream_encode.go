@@ -39,7 +39,7 @@ func iterStruct(in reflect.Value, itemFunc MappingIteratorFunc) error {
 		}
 		wouldOmit := info.OmitEmpty && isZero(value)
 
-		if err := itemFunc(reflect.ValueOf(info.Key), reflect.ValueOf(value), info.Flow, wouldOmit); err != nil {
+		if err := itemFunc(reflect.ValueOf(info.Key), value, info.Flow, wouldOmit); err != nil {
 			return err
 		}
 	}
@@ -146,4 +146,9 @@ func (enc *StreamEncoder) EmitValue(tag string, o reflect.Value, flow bool) {
 	enc.flow = flow
 	enc.marshal(tag, o)
 	enc.flow = prevFlow
+}
+
+func (enc *StreamEncoder) EmitComment(comment string, ownLine bool) {
+	enc.must(yaml_comment_event_initialize(&enc.event, []byte(comment), ownLine))
+	enc.emit()
 }

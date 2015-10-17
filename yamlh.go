@@ -82,6 +82,15 @@ const (
 	yaml_FOLDED_SCALAR_STYLE        // The folded scalar style.
 )
 
+type yaml_comment_style_t yaml_style_t
+
+// Comment styles
+const (
+	yaml_ANY_COMMENT_STYLE = iota
+	yaml_OWN_LINE_COMMENT_STYLE
+	yaml_SAME_LINE_COMMENT_STYLE
+)
+
 type yaml_sequence_style_t yaml_style_t
 
 // Sequence styles.
@@ -238,6 +247,7 @@ const (
 	yaml_SEQUENCE_END_EVENT   // A SEQUENCE-END event.
 	yaml_MAPPING_START_EVENT  // A MAPPING-START event.
 	yaml_MAPPING_END_EVENT    // A MAPPING-END event.
+	yaml_COMMENT_EVENT        // A COMMENT event.
 )
 
 func (et yaml_event_type_t) String() string {
@@ -728,6 +738,12 @@ type yaml_emitter_t struct {
 		single_quoted_allowed bool                // Can the scalar be expressed in the single quoted style?
 		block_allowed         bool                // Can the scalar be expressed in the literal or folded styles?
 		style                 yaml_scalar_style_t // The output style.
+	}
+
+	// Comment storage
+	comment_data struct {
+		value   []byte // the value of the comment
+		ownLine bool   // whether or not this comment should be on its own line
 	}
 
 	// Dumper stuff
