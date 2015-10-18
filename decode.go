@@ -51,7 +51,7 @@ func newParser(b []byte) *parser {
 
 	p.skip()
 	if p.event.typ != yaml_STREAM_START_EVENT {
-		panic("expected stream start event, got " + strconv.Itoa(int(p.event.typ)))
+		panic("expected stream start event, got " + p.event.typ.String())
 	}
 	p.skip()
 	return &p
@@ -118,7 +118,7 @@ func (p *parser) parse() *node {
 		// Happens when attempting to decode an empty buffer.
 		return nil
 	default:
-		panic("attempted to parse unknown event: " + strconv.Itoa(int(p.event.typ)))
+		panic("attempted to parse unknown event: " + p.event.typ.String())
 	}
 	panic("unreachable")
 }
@@ -138,7 +138,7 @@ func (p *parser) document() *node {
 	p.skip()
 	n.children = append(n.children, p.parse())
 	if p.event.typ != yaml_DOCUMENT_END_EVENT {
-		panic("expected end of document event but got " + strconv.Itoa(int(p.event.typ)))
+		panic("expected end of document event but got " + p.event.typ.String())
 	}
 	p.skip()
 	return n
@@ -166,6 +166,10 @@ func (p *parser) sequence() *node {
 	p.anchor(n, p.event.anchor)
 	p.skip()
 	for p.event.typ != yaml_SEQUENCE_END_EVENT {
+		if p.event.typ == yaml_COMMENT_EVENT {
+			p.skip()
+			continue
+		}
 		n.children = append(n.children, p.parse())
 	}
 	p.skip()
@@ -177,6 +181,10 @@ func (p *parser) mapping() *node {
 	p.anchor(n, p.event.anchor)
 	p.skip()
 	for p.event.typ != yaml_MAPPING_END_EVENT {
+		if p.event.typ == yaml_COMMENT_EVENT {
+			p.skip()
+			continue
+		}
 		n.children = append(n.children, p.parse(), p.parse())
 	}
 	p.skip()
