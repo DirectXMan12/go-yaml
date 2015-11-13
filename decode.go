@@ -117,6 +117,10 @@ func (p *parser) parse() *node {
 	case yaml_STREAM_END_EVENT:
 		// Happens when attempting to decode an empty buffer.
 		return nil
+	case yaml_COMMENT_EVENT:
+		// we don't care about comments for the normal decoder
+		p.skip()
+		return p.parse()
 	default:
 		panic("attempted to parse unknown event: " + p.event.typ.String())
 	}

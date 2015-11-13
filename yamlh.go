@@ -148,6 +148,7 @@ const (
 	yaml_ANCHOR_TOKEN // An ANCHOR token.
 	yaml_TAG_TOKEN    // A TAG token.
 	yaml_SCALAR_TOKEN // A SCALAR token.
+	yaml_COMMENT_TOKEN // A COMMENT token.
 )
 
 func (tt yaml_token_type_t) String() string {
@@ -196,6 +197,8 @@ func (tt yaml_token_type_t) String() string {
 		return "yaml_TAG_TOKEN"
 	case yaml_SCALAR_TOKEN:
 		return "yaml_SCALAR_TOKEN"
+	case yaml_COMMENT_TOKEN:
+		return "yaml_COMMENT_TOKEN"
 	}
 	return "<unknown token>"
 }

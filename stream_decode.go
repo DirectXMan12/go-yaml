@@ -19,6 +19,7 @@ const (
 	SequenceStartEvent
 	SequenceEndEvent
 	FinishEvent
+	CommentEvent
 )
 
 func (k DecoderEventKind) String() string {
@@ -37,6 +38,8 @@ func (k DecoderEventKind) String() string {
 		return "SequenceEndEvent"
 	case FinishEvent:
 		return "FinishEvent"
+	case CommentEvent:
+		return "CommentEvent"
 	default:
 		return "UnknownEvent"
 	}
@@ -113,6 +116,9 @@ func (dec *StreamDecoder) NextEvent() Event {
 		evt.Flow = dec.event.style == yaml_style_t(yaml_FLOW_SEQUENCE_STYLE)
 	case yaml_SEQUENCE_END_EVENT:
 		evt.Kind = SequenceEndEvent
+	case yaml_COMMENT_EVENT:
+		evt.Kind = CommentEvent
+		evt.Value = reflect.ValueOf(string(dec.event.value))
 	case yaml_DOCUMENT_END_EVENT:
 		evt.Kind = FinishEvent
 		defer dec.destroy()

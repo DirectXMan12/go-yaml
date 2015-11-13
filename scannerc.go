@@ -579,7 +579,7 @@ func yaml_parser_scan(parser *yaml_parser_t, token *yaml_token_t) bool {
 
 	// Ensure that the tokens queue contains enough tokens.
 	if !parser.token_available {
-		if !yaml_parser_fetch_more_tokens(parser) {
+		if !yaml_parser_fetch_more_tokens(parser, 1) {
 			return false
 		}
 	}
@@ -623,13 +623,13 @@ func trace(args ...interface{}) func() {
 
 // Ensure that the tokens queue contains at least one token which can be
 // returned to the Parser.
-func yaml_parser_fetch_more_tokens(parser *yaml_parser_t) bool {
+func yaml_parser_fetch_more_tokens(parser *yaml_parser_t, num int) bool {
 	// While we need more tokens to fetch, do it.
 	for {
 		// Check if we really need to fetch more tokens.
 		need_more_tokens := false
 
-		if parser.tokens_head == len(parser.tokens) {
+		if len(parser.tokens) - parser.tokens_head < num {
 			// Queue is empty.
 			need_more_tokens = true
 		} else {
@@ -673,7 +673,7 @@ func yaml_parser_fetch_next_token(parser *yaml_parser_t) bool {
 		return yaml_parser_fetch_stream_start(parser)
 	}
 
-	// Eat whitespaces and comments until we reach the next token.
+	// Eat whitespaces until we reach the next token.
 	if !yaml_parser_scan_to_next_token(parser) {
 		return false
 	}
@@ -792,6 +792,11 @@ func yaml_parser_fetch_next_token(parser *yaml_parser_t) bool {
 	// Is it a double-quoted scalar?
 	if parser.buffer[parser.buffer_pos] == '"' {
 		return yaml_parser_fetch_flow_scalar(parser, false)
+	}
+
+	// Is it a comment?
+	if parser.buffer[parser.buffer_pos] == '#' {
+		return yaml_parser_fetch_comment(parser)
 	}
 
 	// Is it a plain scalar?
@@ -1430,6 +1435,24 @@ func yaml_parser_fetch_plain_scalar(parser *yaml_parser_t) bool {
 	return true
 }
 
+// Produce the COMMENT(...) token
+func yaml_parser_fetch_comment(parser *yaml_parser_t) bool {
+	// TODO(directxman12): figure out the simple key stuff here
+	/*if !yaml_parser_save_simple_key(parser) {
+		return false
+	}*/
+
+	// A simple key cannot follow an anchor or an alias.
+	//parser.simple_key_allowed = false
+	var token yaml_token_t
+	if !yaml_parser_scan_comment(parser, &token) {
+		return false
+	}
+
+	yaml_insert_token(parser, -1, &token)
+	return true
+}
+
 // Eat whitespaces and comments until the next token is found.
 func yaml_parser_scan_to_next_token(parser *yaml_parser_t) bool {
 
@@ -1456,16 +1479,6 @@ func yaml_parser_scan_to_next_token(parser *yaml_parser_t) bool {
 			skip(parser)
 			if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
 				return false
-			}
-		}
-
-		// Eat a comment until a line break.
-		if parser.buffer[parser.buffer_pos] == '#' {
-			for !is_breakz(parser.buffer, parser.buffer_pos) {
-				skip(parser)
-				if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
-					return false
-				}
 			}
 		}
 
@@ -1550,6 +1563,7 @@ func yaml_parser_scan_directive(parser *yaml_parser_t, token *yaml_token_t) bool
 		return false
 	}
 
+	// TODO: check comment here (we just throw this out...)?
 	// Eat the rest of the line including any comments.
 	if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
 		return false
@@ -2121,7 +2135,7 @@ func yaml_parser_scan_block_scalar(parser *yaml_parser_t, token *yaml_token_t, l
 		}
 	}
 
-	// Eat whitespaces and comments to the end of the line.
+	// Eat whitespaces to the end of the line.
 	if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
 		return false
 	}
@@ -2132,11 +2146,8 @@ func yaml_parser_scan_block_scalar(parser *yaml_parser_t, token *yaml_token_t, l
 		}
 	}
 	if parser.buffer[parser.buffer_pos] == '#' {
-		for !is_breakz(parser.buffer, parser.buffer_pos) {
-			skip(parser)
-			if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
-				return false
-			}
+		if !yaml_parser_fetch_comment(parser) {
+			return false
 		}
 	}
 
@@ -2706,5 +2717,49 @@ func yaml_parser_scan_plain_scalar(parser *yaml_parser_t, token *yaml_token_t) b
 	if leading_blanks {
 		parser.simple_key_allowed = true
 	}
+	return true
+}
+
+// Scan a comment
+func yaml_parser_scan_comment(parser *yaml_parser_t, token *yaml_token_t) bool {
+	if parser.buffer[parser.buffer_pos] != '#' {
+		return false
+	}
+
+	start_mark := parser.mark
+
+	// skip the '#'
+	skip(parser)
+
+	// Eat whitespaces
+	if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
+		return false
+	}
+	for is_blank(parser.buffer, parser.buffer_pos) {
+		skip(parser)
+		if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
+			return false
+		}
+	}
+
+	var s []byte
+
+	// scan the line
+	for !is_breakz(parser.buffer, parser.buffer_pos) {
+		s = read(parser, s)
+		if parser.unread < 1 && !yaml_parser_update_buffer(parser, 1) {
+			return false
+		}
+	}
+
+	end_mark := parser.mark
+
+	*token = yaml_token_t{
+		typ:        yaml_COMMENT_TOKEN,
+		start_mark: start_mark,
+		end_mark:   end_mark,
+		value:      s,
+	}
+
 	return true
 }

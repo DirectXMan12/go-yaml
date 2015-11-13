@@ -2,6 +2,7 @@ package yaml
 
 import (
 	"bytes"
+	"strings"
 )
 
 // The parser implements the following grammar:
@@ -42,13 +43,26 @@ import (
 //                          FLOW-MAPPING-END
 // flow_mapping_entry   ::= flow_node | KEY flow_node? (VALUE flow_node?)?
 
-// Peek the next token in the token queue.
+// Peek the next token in the token queue (skipping comments)
 func peek_token(parser *yaml_parser_t) *yaml_token_t {
-	if parser.token_available || yaml_parser_fetch_more_tokens(parser) {
-		return &parser.tokens[parser.tokens_head]
+	if parser.token_available || yaml_parser_fetch_more_tokens(parser, 1) {
+		token := &parser.tokens[parser.tokens_head]
+		return token
 	}
 	return nil
 }
+
+// Peek at the nth next token in the token queue (including comments)
+func peek_raw_token(parser *yaml_parser_t, num int) *yaml_token_t {
+	if (parser.token_available && len(parser.tokens) - parser.tokens_head >= num) || yaml_parser_fetch_more_tokens(parser, num) {
+
+		token := &parser.tokens[parser.tokens_head+num-1]
+		return token
+	}
+
+	return nil
+}
+
 
 // Remove the next token from the queue (must be called after peek_token).
 func skip_token(parser *yaml_parser_t) {
@@ -56,6 +70,27 @@ func skip_token(parser *yaml_parser_t) {
 	parser.tokens_parsed++
 	parser.stream_end_produced = parser.tokens[parser.tokens_head].typ == yaml_STREAM_END_TOKEN
 	parser.tokens_head++
+}
+
+// skip tokens starting at start offset from token head to end offset from token head
+// (including start, excluding end)
+func skip_token_slice(parser *yaml_parser_t, start, end int) {
+	parser.token_available = false
+	parser.tokens_parsed += end - start
+	parser.stream_end_produced = parser.tokens[parser.tokens_head].typ == yaml_STREAM_END_TOKEN
+	if start == 0 {
+		parser.tokens_head += end - start
+	} else {
+		target_len := len(parser.tokens) - (end - start)
+		copy(parser.tokens[parser.tokens_head+start:], parser.tokens[parser.tokens_head+end:])
+		parser.tokens = parser.tokens[:target_len]
+	}
+}
+
+
+// Asynchronously emit an event
+func yaml_parser_emit_event(parser *yaml_parser_t, event *yaml_event_t) {
+
 }
 
 // Get the next event.
@@ -223,7 +258,7 @@ func yaml_parser_parse_document_start(parser *yaml_parser_t, event *yaml_event_t
 			return false
 		}
 		parser.states = append(parser.states, yaml_PARSE_DOCUMENT_END_STATE)
-		parser.state = yaml_PARSE_BLOCK_NODE_STATE
+		parser.state = yaml_PARSE_DOCUMENT_CONTENT_STATE
 
 		*event = yaml_event_t{
 			typ:        yaml_DOCUMENT_START_EVENT,
@@ -276,11 +311,48 @@ func yaml_parser_parse_document_start(parser *yaml_parser_t, event *yaml_event_t
 	return true
 }
 
+
+// Check for a comment token.
+func yaml_parser_check_comment(parser *yaml_parser_t, event *yaml_event_t, token_ind int) bool {
+	start_ind := token_ind - 1
+	token := peek_raw_token(parser, token_ind)
+	if token == nil {
+		return false
+	}
+	if token.typ == yaml_COMMENT_TOKEN {
+		var val []string
+		var end_mark yaml_mark_t
+		start_mark := token.start_mark
+		for token != nil && token.typ == yaml_COMMENT_TOKEN {
+			val = append(val, string(token.value))
+			end_mark = token.end_mark
+			token_ind++
+			token = peek_raw_token(parser, token_ind)
+		}
+
+		skip_token_slice(parser, start_ind, token_ind-1)
+
+		*event = yaml_event_t{
+			typ:        yaml_COMMENT_EVENT,
+			start_mark: start_mark,
+			end_mark:   end_mark,
+			value:      []byte(strings.Join(val, "\n")),
+		}
+
+		return true
+	}
+
+	return false
+}
+
 // Parse the productions:
 // explicit_document    ::= DIRECTIVE* DOCUMENT-START block_node? DOCUMENT-END*
 //                                                    ***********
 //
 func yaml_parser_parse_document_content(parser *yaml_parser_t, event *yaml_event_t) bool {
+	if yaml_parser_check_comment(parser, event, 1) {
+		return true
+	}
 	token := peek_token(parser)
 	if token == nil {
 		return false
@@ -360,6 +432,9 @@ func yaml_parser_parse_document_end(parser *yaml_parser_t, event *yaml_event_t) 
 func yaml_parser_parse_node(parser *yaml_parser_t, event *yaml_event_t, block, indentless_sequence bool) bool {
 	//defer trace("yaml_parser_parse_node", "block:", block, "indentless_sequence:", indentless_sequence)()
 
+	if block && yaml_parser_check_comment(parser, event, 1) {
+		return true
+	}
 	token := peek_token(parser)
 	if token == nil {
 		return false
@@ -589,13 +664,23 @@ func yaml_parser_parse_block_sequence_entry(parser *yaml_parser_t, event *yaml_e
 		return false
 	}
 
+	if yaml_parser_check_comment(parser, event, 1) {
+		parser.state = yaml_PARSE_BLOCK_SEQUENCE_ENTRY_STATE
+		return true
+	}
+
 	if token.typ == yaml_BLOCK_ENTRY_TOKEN {
+		if yaml_parser_check_comment(parser, event, 2) {
+			parser.state = yaml_PARSE_BLOCK_SEQUENCE_ENTRY_STATE
+			return true
+		}
 		mark := token.end_mark
 		skip_token(parser)
 		token = peek_token(parser)
 		if token == nil {
 			return false
 		}
+
 		if token.typ != yaml_BLOCK_ENTRY_TOKEN && token.typ != yaml_BLOCK_END_TOKEN {
 			parser.states = append(parser.states, yaml_PARSE_BLOCK_SEQUENCE_ENTRY_STATE)
 			return yaml_parser_parse_node(parser, event, true, false)
@@ -635,7 +720,15 @@ func yaml_parser_parse_indentless_sequence_entry(parser *yaml_parser_t, event *y
 		return false
 	}
 
+	if yaml_parser_check_comment(parser, event, 1) {
+		return true
+	}
+
 	if token.typ == yaml_BLOCK_ENTRY_TOKEN {
+		if yaml_parser_check_comment(parser, event, 2) {
+			return true
+		}
+
 		mark := token.end_mark
 		skip_token(parser)
 		token = peek_token(parser)
@@ -678,6 +771,11 @@ func yaml_parser_parse_block_mapping_key(parser *yaml_parser_t, event *yaml_even
 		token := peek_token(parser)
 		parser.marks = append(parser.marks, token.start_mark)
 		skip_token(parser)
+	}
+
+	if yaml_parser_check_comment(parser, event, 1) {
+		parser.state = yaml_PARSE_BLOCK_MAPPING_KEY_STATE
+		return true
 	}
 
 	token := peek_token(parser)
@@ -736,7 +834,20 @@ func yaml_parser_parse_block_mapping_value(parser *yaml_parser_t, event *yaml_ev
 	if token == nil {
 		return false
 	}
+	if yaml_parser_check_comment(parser, event, 1) {
+		return true
+	}
 	if token.typ == yaml_VALUE_TOKEN {
+		// it's possible to have TAG COMMENT SCALAR here, so check
+		if next_token := peek_raw_token(parser, 2); next_token != nil && next_token.typ == yaml_TAG_TOKEN {
+			if yaml_parser_check_comment(parser, event, 3) {
+				return true
+			}
+		} else {
+			if yaml_parser_check_comment(parser, event, 2) {
+				return true
+			}
+		}
 		mark := token.end_mark
 		skip_token(parser)
 		token = peek_token(parser)
