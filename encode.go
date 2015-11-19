@@ -18,13 +18,17 @@ type encoder struct {
 	flow    bool
 }
 
-func newEncoder() (e *encoder) {
-	e = &encoder{}
+func (e *encoder) initStream() {
 	e.must(yaml_emitter_initialize(&e.emitter))
 	yaml_emitter_set_output_string(&e.emitter, &e.out)
 	yaml_emitter_set_unicode(&e.emitter, true)
 	e.must(yaml_stream_start_event_initialize(&e.event, yaml_UTF8_ENCODING))
 	e.emit()
+}
+
+func newEncoder() (e *encoder) {
+	e = &encoder{}
+	e.initStream()
 	e.must(yaml_document_start_event_initialize(&e.event, nil, nil, true))
 	e.emit()
 	return e
@@ -82,7 +86,7 @@ func (e *encoder) marshal(tag string, in reflect.Value) {
 		}
 		in = reflect.ValueOf(string(text))
 	} else if m, ok := iface.(StreamMarshaler); ok {
-		err := m.StreamMarshalYAML(&StreamEncoder{e})
+		err := m.StreamMarshalYAML(&streamEncoder{e, true})
 		if err != nil {
 			fail(err)
 		}

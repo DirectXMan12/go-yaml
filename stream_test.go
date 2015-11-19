@@ -74,13 +74,13 @@ var extraCommentRoundTripTests = []struct{
 	// comment in empty doc
 	{
 		"---\n# empty\n...",
-		"# empty\nnull\n",
+		"---\n# empty\nnull\n...\n",
 	},
 
 }
 
 func encodeEvents(decoder *yaml.StreamDecoder) (string, error) {
-	encoder := yaml.NewStreamEncoder()
+	encoder := yaml.NewExplicitStreamEncoder()
 	for evt := decoder.NextEvent(); evt.Kind != yaml.FinishEvent; evt = decoder.NextEvent() {
 		tag := evt.Tag
 		if evt.Implicit || evt.QuotedImplicit {
@@ -95,15 +95,19 @@ func encodeEvents(decoder *yaml.StreamDecoder) (string, error) {
 				encoder.EmitValue(tag, evt.Value, evt.Flow)
 			}
 		case yaml.MappingStartEvent:
-			encoder.BeginMapping(tag, evt.Flow)
+			encoder.BeginMapping("", tag, evt.Flow)
 		case yaml.MappingEndEvent:
 			encoder.EndMapping()
 		case yaml.SequenceStartEvent:
-			encoder.BeginSequence(tag, evt.Flow)
+			encoder.BeginSequence("", tag, evt.Flow)
 		case yaml.SequenceEndEvent:
 			encoder.EndSequence()
 		case yaml.CommentEvent:
 			encoder.EmitComment(evt.Value.String(), true)
+		case yaml.DocumentStartEvent:
+			encoder.BeginDocument(evt.YAMLVersion, evt.TagDefinitions, evt.Implicit)
+		case yaml.DocumentEndEvent:
+			encoder.EndDocument(evt.Implicit)
 		default:
 			return "", fmt.Errorf("Unknown event: %+v", evt)
 		}
@@ -114,12 +118,12 @@ func encodeEvents(decoder *yaml.StreamDecoder) (string, error) {
 
 
 func (s *S) TestRoundTrip(c *C) {
-	/*for _, item := range marshalTests {
+	for _, item := range marshalTests {
 		decoder := yaml.NewStreamDecoder([]byte(item.data))
 		newYaml, err := encodeEvents(decoder)
 		c.Assert(err, IsNil)
 		c.Assert(newYaml, Equals, item.data)
-	}*/
+	}
 
 	for _, item := range extraCommentRoundTripTests {
 		decoder := yaml.NewStreamDecoder([]byte(item.in))

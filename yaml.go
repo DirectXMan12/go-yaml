@@ -43,7 +43,7 @@ type Marshaler interface {
 }
 
 type StreamMarshaler interface {
-	StreamMarshalYAML(*StreamEncoder) error
+	StreamMarshalYAML(StreamEncoder) error
 }
 
 // Unmarshal decodes the first document found within the in byte slice
@@ -157,6 +157,10 @@ func handleErr(err *error) {
 			panic(v)
 		}
 	}
+}
+
+func (err yamlError) Error() string {
+	return err.err.Error()
 }
 
 type yamlError struct {

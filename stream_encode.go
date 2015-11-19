@@ -6,19 +6,50 @@ import (
 	"sort"
 )
 
-type StreamEncoder struct {
+type StreamEncoder interface {
+	EmitAsMap(tag string, flow bool, mapping reflect.Value, emitItem MappingIteratorFunc) error
+	BeginMapping(anchor, tag string, flow bool)
+	EndMapping()
+	BeginSequence(anchor, tag string, flow bool)
+	EndSequence()
+	EmitValue(tag string, o reflect.Value, flow bool)
+	EmitComment(comment string, ownLine bool)
+	Finish() []byte
+}
+
+type ExplicitStreamEncoder interface {
+	StreamEncoder
+	EmitRawScalar(anchor, tag string, style ScalarStyleKind, o string)
+	BeginDocument(version *VersionInfo, tagDefs []TagInfo, implicit bool)
+	EndDocument(implicit bool)
+}
+
+type streamEncoder struct {
 	*encoder
+	implicit bool
 }
 
 // Basic lifecycle functions
-func NewStreamEncoder() *StreamEncoder {
+func NewImplicitStreamEncoder() StreamEncoder {
 	rawEnc := newEncoder()
-	return &StreamEncoder{rawEnc}
+	return &streamEncoder{rawEnc, true}
 }
 
-func (enc *StreamEncoder) Finish() []byte {
+func NewExplicitStreamEncoder() ExplicitStreamEncoder {
+	rawEnc := &encoder{}
+	rawEnc.initStream()
+	return &streamEncoder{rawEnc, false}
+}
+
+func (enc *streamEncoder) Finish() []byte {
 	defer enc.destroy()
-	enc.finish()
+	if enc.implicit {
+		enc.finish()
+	} else {
+		enc.must(yaml_stream_end_event_initialize(&enc.event))
+		enc.emit()
+	}
+
 	return enc.out
 }
 
@@ -63,7 +94,7 @@ func iterStruct(in reflect.Value, itemFunc MappingIteratorFunc) error {
 }
 
 // helper to make marshaling structs and maps more convinient
-func (enc *StreamEncoder) EmitAsMap(tag string, flow bool, mapping reflect.Value, emitItem MappingIteratorFunc) error {
+func (enc *streamEncoder) EmitAsMap(tag string, flow bool, mapping reflect.Value, emitItem MappingIteratorFunc) error {
 	if !mapping.IsValid() {
 		enc.nilv()
 		return nil
@@ -110,7 +141,7 @@ func (enc *StreamEncoder) EmitAsMap(tag string, flow bool, mapping reflect.Value
 }
 
 // collections helpers
-func (enc *StreamEncoder) BeginMapping(anchor, tag string, flow bool) {
+func (enc *streamEncoder) BeginMapping(anchor, tag string, flow bool) {
 	style := yaml_BLOCK_MAPPING_STYLE
 	if flow {
 		style = yaml_FLOW_MAPPING_STYLE
@@ -120,12 +151,12 @@ func (enc *StreamEncoder) BeginMapping(anchor, tag string, flow bool) {
 	enc.emit()
 }
 
-func (enc *StreamEncoder) EndMapping() {
+func (enc *streamEncoder) EndMapping() {
 	enc.must(yaml_mapping_end_event_initialize(&enc.event))
 	enc.emit()
 }
 
-func (enc *StreamEncoder) BeginSequence(anchor, tag string, flow bool) {
+func (enc *streamEncoder) BeginSequence(anchor, tag string, flow bool) {
 	style := yaml_BLOCK_SEQUENCE_STYLE
 	if flow {
 		style = yaml_FLOW_SEQUENCE_STYLE
@@ -135,20 +166,46 @@ func (enc *StreamEncoder) BeginSequence(anchor, tag string, flow bool) {
 	enc.emit()
 }
 
-func (enc *StreamEncoder) EndSequence() {
+func (enc *streamEncoder) EndSequence() {
 	enc.must(yaml_sequence_end_event_initialize(&enc.event))
 	enc.emit()
 }
 
 // access to existing marshal functionality
-func (enc *StreamEncoder) EmitValue(tag string, o reflect.Value, flow bool) {
+func (enc *streamEncoder) EmitValue(tag string, o reflect.Value, flow bool) {
 	prevFlow := enc.flow
 	enc.flow = flow
 	enc.marshal(tag, o)
 	enc.flow = prevFlow
 }
 
-func (enc *StreamEncoder) EmitComment(comment string, ownLine bool) {
+func (enc *streamEncoder) EmitComment(comment string, ownLine bool) {
 	enc.must(yaml_comment_event_initialize(&enc.event, []byte(comment), ownLine))
 	enc.emit()
+}
+
+func (enc *streamEncoder) BeginDocument(version *VersionInfo, tagDefs []TagInfo, implicit bool) {
+	var rawVersion *yaml_version_directive_t
+	if version != nil {
+		rawVersion = &yaml_version_directive_t{major: version.Major, minor: version.Minor}
+	}
+
+	rawTagDefs := make([]yaml_tag_directive_t, len(tagDefs))
+	for i, info := range tagDefs {
+		rawTagDefs[i] = yaml_tag_directive_t{handle: []byte(info.Handle), prefix: []byte(info.Prefix)}
+	}
+
+	enc.must(yaml_document_start_event_initialize(&enc.event, rawVersion, rawTagDefs, implicit))
+	enc.emit()
+	enc.emitter.open_ended = !implicit
+}
+
+func (enc *streamEncoder) EndDocument(implicit bool) {
+	enc.must(yaml_document_end_event_initialize(&enc.event, implicit))
+	enc.emit()
+	enc.emitter.open_ended = false
+}
+
+func (enc *streamEncoder) EmitRawScalar(tag string, anchor string, style ScalarStyleKind, o string) {
+	enc.emitScalar(o, anchor, tag, style.toYamlScalarStyle())
 }
