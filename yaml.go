@@ -141,7 +141,7 @@ func Unmarshal(in []byte, out interface{}) (err error) {
 //
 func Marshal(in interface{}) (out []byte, err error) {
 	defer handleErr(&err)
-	e := newEncoder()
+	e := newEncoder(0, 0, 0)
 	defer e.destroy()
 	e.marshal("", reflect.ValueOf(in))
 	e.finish()

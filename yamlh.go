@@ -689,11 +689,12 @@ type yaml_emitter_t struct {
 
 	// Emitter stuff
 
-	canonical   bool         // If the output is in the canonical style?
-	best_indent int          // The number of indentation spaces.
-	best_width  int          // The preferred width of the output lines.
-	unicode     bool         // Allow unescaped non-ASCII characters?
-	line_break  yaml_break_t // The preferred line break.
+	canonical        bool         // If the output is in the canonical style?
+	best_indent      int          // The number of indentation spaces.
+	best_width       int          // The preferred width of the output lines.
+	unicode          bool         // Allow unescaped non-ASCII characters?
+	line_break       yaml_break_t // The preferred line break.
+	comment_start    int          // The minimum index at which to start same-line comments
 
 	state  yaml_emitter_state_t   // The current emitter state.
 	states []yaml_emitter_state_t // The stack of states.

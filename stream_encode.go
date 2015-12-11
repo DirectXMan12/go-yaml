@@ -30,13 +30,16 @@ type streamEncoder struct {
 }
 
 // Basic lifecycle functions
-func NewImplicitStreamEncoder() StreamEncoder {
-	rawEnc := newEncoder()
+func NewImplicitStreamEncoder(maxWidth, indentSize, commentStart int) StreamEncoder {
+	rawEnc := newEncoder(maxWidth, indentSize, commentStart)
 	return &streamEncoder{rawEnc, true}
 }
 
-func NewExplicitStreamEncoder() ExplicitStreamEncoder {
+func NewExplicitStreamEncoder(maxWidth, indentSize, commentStart int) ExplicitStreamEncoder {
 	rawEnc := &encoder{}
+	rawEnc.emitter.best_width = maxWidth
+	rawEnc.emitter.best_indent = indentSize
+	rawEnc.emitter.comment_start = commentStart
 	rawEnc.initStream()
 	return &streamEncoder{rawEnc, false}
 }

@@ -82,12 +82,11 @@ func yaml_parser_set_encoding(parser *yaml_parser_t, encoding yaml_encoding_t) {
 
 // Create a new emitter object.
 func yaml_emitter_initialize(emitter *yaml_emitter_t) bool {
-	*emitter = yaml_emitter_t{
-		buffer:     make([]byte, output_buffer_size),
-		raw_buffer: make([]byte, 0, output_raw_buffer_size),
-		states:     make([]yaml_emitter_state_t, 0, initial_stack_size),
-		events:     make([]yaml_event_t, 0, initial_queue_size),
-	}
+	emitter.buffer = make([]byte, output_buffer_size)
+	emitter.raw_buffer = make([]byte, 0, output_raw_buffer_size)
+	emitter.states = make([]yaml_emitter_state_t, 0, initial_stack_size)
+	emitter.events = make([]yaml_event_t, 0, initial_queue_size)
+
 	return true
 }
 

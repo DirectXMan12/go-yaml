@@ -354,6 +354,9 @@ func yaml_emitter_emit_stream_start(emitter *yaml_emitter_t, event *yaml_event_t
 	if emitter.line_break == yaml_ANY_BREAK {
 		emitter.line_break = yaml_LN_BREAK
 	}
+	if emitter.comment_start < 0 {
+		emitter.comment_start = emitter.best_width
+	}
 
 	emitter.indent = -1
 	emitter.line = 0
@@ -1874,6 +1877,15 @@ func yaml_emitter_write_folded_scalar(emitter *yaml_emitter_t, value []byte) boo
 }
 
 func yaml_emitter_write_comment(emitter *yaml_emitter_t, value []byte, ownLine bool, allowNewline bool) bool {
+	if !ownLine {
+		// move over to the minimum column at which to start the comment
+		for emitter.column < emitter.comment_start - 1 {
+			if !put(emitter, ' ') {
+				return false
+			}
+		}
+	}
+
 	if !yaml_emitter_write_indicator(emitter, []byte{'#', ' '}, true, false, false) {
 		return false
 	}

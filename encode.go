@@ -26,8 +26,11 @@ func (e *encoder) initStream() {
 	e.emit()
 }
 
-func newEncoder() (e *encoder) {
+func newEncoder(indent, width, comment_start int) (e *encoder) {
 	e = &encoder{}
+	e.emitter.comment_start = comment_start
+	e.emitter.best_width = width
+	e.emitter.best_indent = indent
 	e.initStream()
 	e.must(yaml_document_start_event_initialize(&e.event, nil, nil, true))
 	e.emit()
